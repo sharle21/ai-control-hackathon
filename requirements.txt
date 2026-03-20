@@ -1,0 +1,21 @@
+# AI Control Hackathon — Python dependencies
+# Install order matters: control-arena pulls in inspect-ai as a dependency.
+#
+# Step 1: pip install -r requirements.txt
+# Step 2: pip install git+https://github.com/rasmusfaber/SHADE-Arena.git@wheels
+
+# Core frameworks
+control-arena
+inspect-ai
+
+# Anthropic + OpenAI clients (vLLM uses OpenAI-compatible API)
+anthropic
+openai
+
+# Data validation (used for ShadeTask schema)
+pydantic
+
+# Analysis suite
+matplotlib
+numpy
+pandas
