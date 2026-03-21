@@ -686,7 +686,7 @@ def run_oracle_solver_fn(
 
 def build_control_eval_config(
     model_variant: str,
-    max_steps: int = 100,
+    max_steps: int = 40,
     limit: Optional[int] = None,
     trusted_model: Optional[str] = None,
 ) -> ControlEvalConfig:
@@ -738,7 +738,7 @@ def build_control_eval_config(
         trusted_config=trusted_cfg,
 
         max_steps=max_steps,
-        token_limit=1_000_000,
+        token_limit=4_000_000,
         limit=limit,
 
         # Parallelism
