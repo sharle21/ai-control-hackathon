@@ -686,7 +686,7 @@ def run_oracle_solver_fn(
 
 def build_control_eval_config(
     model_variant: str,
-    max_steps: int = 40,
+    max_steps: int = 80,
     limit: Optional[int] = None,
     trusted_model: Optional[str] = None,
     untrusted_model_override: Optional[str] = None,
