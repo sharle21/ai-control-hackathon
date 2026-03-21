@@ -15,9 +15,9 @@ ANTHROPIC_TRUSTED_MODEL = "anthropic/claude-opus-4-6"
 # For Ollama testing (no GPU), all three point to localhost:11434.
 # For real vLLM (post-HF-access), swap to ports 8000 / 8001 / 8002.
 VLLM_ENDPOINTS: dict[str, str] = {
-    "baseline_8b":   "http://localhost:11434/v1",
-    "variant_a_8b":  "http://localhost:11434/v1",
-    "variant_b_70b": "http://localhost:11434/v1",
+    "baseline_8b":   "http://localhost:8000/v1",
+    "variant_a_8b":  "http://localhost:8001/v1",
+    "variant_b_70b": "http://localhost:8002/v1",
 }
 
 # ── Truncation proxy endpoints (framework calls THESE, not VLLM_ENDPOINTS) ───
@@ -35,9 +35,9 @@ PROXY_ENDPOINTS: dict[str, str] = {
 }
 
 VLLM_MODEL_NAMES: dict[str, str] = {
-    "baseline_8b":   "llama3.1",
-    "variant_a_8b":  "llama3.1",
-    "variant_b_70b": "llama3.1",
+    "baseline_8b":   "meta-llama/Meta-Llama-3-8B-Instruct",
+    "variant_a_8b":  "meta-llama/Meta-Llama-3-8B-Instruct",
+    "variant_b_70b": "meta-llama/Meta-Llama-3-70B-Instruct",
 }
 
 MODEL_VARIANTS = list(VLLM_ENDPOINTS.keys())
