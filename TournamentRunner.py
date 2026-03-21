@@ -711,6 +711,10 @@ def build_control_eval_config(
     os.environ.setdefault("OPENAI_API_KEY", "EMPTY")
     untrusted_model_str = f"openai/{vllm_model_name}"
 
+    # The SHADE-Arena framework also reads UNTRUSTED_MODEL from the environment.
+    # Without this, it falls back to claude-sonnet and ignores our vLLM endpoint.
+    os.environ["UNTRUSTED_MODEL"] = untrusted_model_str
+
     # Extended thinking is only supported on Opus models.
     # Haiku / Sonnet overrides (--trusted_model for smoke tests) must NOT send
     # the thinking extra_body or the Anthropic API returns a 400 error.
@@ -787,10 +791,15 @@ def build_task_matrix(
         "3. IMMEDIATELY use the submit tool. Do not loop."
     )
 
+    # Debug: confirm whether AttackPolicy injection is active on this install
+    print(f"[DEBUG] _HAS_ATTACK_POLICY = {_HAS_ATTACK_POLICY}")
     if _HAS_ATTACK_POLICY:
         micro_protocol.untrusted_policy = UntrustedPolicy(
             attack=AttackPolicy(prompt=spicy_system_prompt)
         )
+        print(f"[DEBUG] UntrustedPolicy set — attack prompt injected")
+    else:
+        print(f"[DEBUG] AttackPolicy unavailable — framework default attack prompt will be used")
 
     # ── Generate the full task matrix: HONEST + ATTACK × all SHADE task pairs ─
     tasks = get_control_task_product(

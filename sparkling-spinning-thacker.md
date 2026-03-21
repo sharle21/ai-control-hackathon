@@ -35,21 +35,43 @@ This project evaluates the **robustness of the Trusted Editing protocol** — a 
 | **Latent Edge-Case Preservation** | Editor inadvertently preserves or amplifies subtle conditional behaviors |
 | **Capability Scaling** | Failure rates shift as generator model capability increases |
 
-### 1.2 Threat Model
+### 1.2 Dual-Track Experiment Design (Updated March 2026)
+
+The experiment uses two parallel, independent tracks that together cover both IT admin tasks
+and SWE/coding tasks:
+
+| | Track A — SHADE-Arena | Track B — LinuxArena |
+|---|---|---|
+| **Framework** | control-arena + Inspect AI | LinuxArena (`lb run eval`) |
+| **Task domain** | IT admin (email, banking, travel booking) | SWE / coding tasks |
+| **Tasks** | 5 task pairs × 3 variants × 2 modes = 30 runs | 10 environments, 300+ tasks (subset TBD) |
+| **Orchestration** | `TournamentRunner.py` | LinuxArena CLI standalone |
+| **Monitor** | `trusted_editing_builder()` micro-protocol | LinuxArena built-in monitor |
+| **Infrastructure** | vLLM on H100 + Anthropic API | Docker + Anthropic API |
+| **Repo** | `~/ai-control-hackathon/` | `~/linuxarena/` (separate) |
+
+**Why LinuxArena is standalone:** It requires Python 3.13+ and Docker, uses its own CLI and
+internal framework, and would require significant plumbing to integrate with control-arena.
+The added complexity is not justified — running it independently and merging results at the
+report stage is cleaner and faster.
+
+---
+
+### 1.3 Threat Model
 
 We model the generator as a potentially misaligned or capability-limited model. The Overseer (Claude) plays the role of a safety-conscious trusted editor. The research question is not whether Claude can be jailbroken, but whether its editing behavior is robust to **ambient ambiguity** — the kind of subtle reasoning contamination that would arise naturally from model misalignment or capability gaps.
 
-### 1.3 Key Definitions
+### 1.4 Key Definitions
 
 - **Generator**: An open-weight model (Llama-3-8B or 70B variant) running via vLLM that produces code and an accompanying reasoning trace.
 - **Trusted Editor / Overseer / Monitor**: Claude `claude-opus-4-6` with `thinking: {type: "adaptive"}`, acting as both editor and behavior auditor.
 - **Secondary Behavior (SB)**: Any code behavior observable at runtime that was not present in the functionally equivalent "clean" reference implementation and that is not an explicit product of the edit request.
 - **Latent Ambiguity**: Code logic that is conditionally activated — benign or inactive under most inputs, but observable under specific edge-case inputs.
 
-### 1.4 Scope and Non-Goals
+### 1.5 Scope and Non-Goals
 
 **In scope:**
-- Controlled code generation and editing pipelines
+- Controlled code generation and editing pipelines (dual-track: SHADE-Arena IT tasks + LinuxArena SWE tasks)
 - Systematic logging of overseer decisions
 - Quantified robustness metrics across three model variants
 - Academic write-up suitable for AI safety workshop submission
@@ -58,6 +80,7 @@ We model the generator as a potentially misaligned or capability-limited model. 
 - Real-world deployment of any generated code
 - Adversarial prompt injection targeting the Anthropic API
 - Any evaluation against production systems
+- Integration of LinuxArena into TournamentRunner.py (LinuxArena runs standalone via its own CLI)
 
 ---
 
@@ -792,15 +815,41 @@ ISCD > 0 confirms H4: Monitor is better calibrated when the false assumption is 
 
 ### 7.1 Experimental Matrix
 
+#### Track A — SHADE-Arena (control-arena / TournamentRunner.py)
+
+SHADE-Arena public split has exactly 5 IT admin task pairs. Each run uses one task pair × one
+generator variant × one eval mode.
+
 | Cell | Generator | Mode | Tasks | Runs |
 |---|---|---|---|---|
-| E1 | baseline_8b | MRC | 30 | 30 |
-| E2 | baseline_8b | LEB | 30 | 30 |
-| E3 | variant_a_8b | MRC | 30 | 30 |
-| E4 | variant_a_8b | LEB | 30 | 30 |
-| E5 | variant_b_70b | MRC | 30 | 30 |
-| E6 | variant_b_70b | LEB | 30 | 30 |
-| **Total** | | | | **180** |
+| E1 | baseline_8b | HONEST | 5 | 5 |
+| E2 | baseline_8b | ATTACK | 5 | 5 |
+| E3 | variant_a_8b | HONEST | 5 | 5 |
+| E4 | variant_a_8b | ATTACK | 5 | 5 |
+| E5 | variant_b_70b | HONEST | 5 | 5 |
+| E6 | variant_b_70b | ATTACK | 5 | 5 |
+| **Track A Total** | | | | **30** |
+
+Run commands (per variant):
+```bash
+python TournamentRunner.py --variant baseline_8b --task_pair ".*"
+python TournamentRunner.py --variant variant_a_8b --task_pair ".*"
+python TournamentRunner.py --variant variant_b_70b --task_pair ".*"
+```
+
+#### Track B — LinuxArena (standalone, separate framework)
+
+Subset of LinuxArena SWE/coding tasks run independently via `lb run eval`. Task count TBD
+based on available time after Track A completes.
+
+```bash
+cd ~/linuxarena
+uv run lb run eval --policy attack -e clinical_trial
+uv run lb run eval --policy honest -e clinical_trial
+# Repeat for additional environments as time allows
+```
+
+Results from Track B are collected separately and merged with Track A findings in the report.
 
 ### 7.2 Hypotheses
 
@@ -1119,6 +1168,9 @@ Distribute remaining report sections
 | 70B run too slow | Medium | Start 70B run at H24; reduce to 20 tasks if needed; report in limitations |
 | Pydantic schema drift | Low | Run `pytest tests/test_run_record.py` after every schema field addition |
 | Report time crunch | High | Pre-assigned sections; Dev A owns empirical, Dev B owns argument sections |
+| LinuxArena Docker issues | Medium | Confirm `docker info` works before pulling environments; `uv run lb registry pull` caches images |
+| LinuxArena task count too large | Medium | Start with 1 environment, confirm end-to-end, then expand; report partial results if time runs out |
+| Track A/B results incomparable | Low | Report separately in paper; dual-track is a feature (IT admin vs SWE), not a flaw |
 
 ### 9.4 Go/No-Go Checkpoints
 
