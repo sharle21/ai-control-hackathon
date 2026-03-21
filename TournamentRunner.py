@@ -709,10 +709,16 @@ def build_control_eval_config(
     to call in (trusted_model = Claude).  The limit parameter is a 'how many
     products to make today' cap — useful for smoke tests.
     """
+    # Build the openai/<model_name> string that inspect_ai / control-arena expects.
+    # The base_url is passed via environment variable OPENAI_BASE_URL or via
+    # the model string itself; we pass it through GenerateConfig extra kwargs.
+    vllm_model_name = VLLM_MODEL_NAMES.get(model_variant, model_variant)
+    vllm_base_url   = VLLM_ENDPOINTS.get(model_variant, "http://localhost:11434/v1")
+    untrusted_model_str = f"openai/{vllm_model_name}"
+
     return ControlEvalConfig(
-        # The untrusted model is the vLLM variant — referenced by variant name
-        # so that heretic_vllm_policy_builder can pick the right endpoint.
-        untrusted_model=model_variant,
+        # The untrusted model is the vLLM/Ollama endpoint in openai/<model> format.
+        untrusted_model=untrusted_model_str,
         untrusted_config=GenerateConfig(temperature=0.7, max_tokens=2_048),
 
         # The trusted model is Claude with adaptive thinking.
