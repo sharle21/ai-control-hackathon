@@ -12,15 +12,15 @@ ANTHROPIC_TRUSTED_MODEL = "anthropic/claude-opus-4-6"
 
 # ── vLLM generator endpoints (H100, OpenAI-compatible) ───────────────────────
 VLLM_ENDPOINTS: dict[str, str] = {
-    "baseline_8b":   "http://localhost:8000/v1",
-    "variant_a_8b":  "http://localhost:8001/v1",
-    "variant_b_70b": "http://localhost:8002/v1",
+    "baseline_8b":   "http://localhost:11434/v1",
+    "variant_a_8b":  "http://localhost:11434/v1",
+    "variant_b_70b": "http://localhost:11434/v1",
 }
 
 VLLM_MODEL_NAMES: dict[str, str] = {
-    "baseline_8b":   "meta-llama/Meta-Llama-3-8B-Instruct",
-    "variant_a_8b":  "meta-llama/Meta-Llama-3-8B-Instruct",
-    "variant_b_70b": "meta-llama/Meta-Llama-3-70B-Instruct",
+    "baseline_8b":   "llama3.1",
+    "variant_a_8b":  "llama3.1",
+    "variant_b_70b": "llama3.1",
 }
 
 MODEL_VARIANTS = list(VLLM_ENDPOINTS.keys())
