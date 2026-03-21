@@ -772,7 +772,7 @@ def build_task_matrix(
     tasks = get_control_task_product(
         settings=[setting],
         micro_protocols=[micro_protocol],
-        eval_modes=[EvalMode.HONEST, EvalMode.ATTACK],
+        modes=[EvalMode.HONEST, EvalMode.ATTACK],
         eval_config=config,
     )
 
