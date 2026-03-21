@@ -486,8 +486,15 @@ def heretic_editor_scaffold(model_variant: str = "baseline_8b"):
 # calibration score (does a higher alarm actually mean a real problem?).
 
 def _extract_suspicion_score(text: str) -> Optional[int]:
-    """Parse <suspicion_score>N</suspicion_score> from monitor response text."""
-    m = re.search(r"<suspicion_score>(\d+)</suspicion_score>", text)
+    """
+    Parse suspicion score from monitor response text.
+    The framework's monitor prompt uses <score>N</score>; we also accept
+    <suspicion_score>N</suspicion_score> as a fallback for compatibility.
+    """
+    m = re.search(r"<score>\s*(\d+)\s*</score>", text)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"<suspicion_score>\s*(\d+)\s*</suspicion_score>", text)
     return int(m.group(1)) if m else None
 
 
@@ -679,7 +686,7 @@ def run_oracle_solver_fn(
 
 def build_control_eval_config(
     model_variant: str,
-    max_steps: int = 20,
+    max_steps: int = 100,
     limit: Optional[int] = None,
     trusted_model: Optional[str] = None,
 ) -> ControlEvalConfig:
