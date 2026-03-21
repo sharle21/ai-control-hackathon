@@ -4,8 +4,8 @@
 # Step 1: pip install -r requirements.txt
 # Step 2: pip install git+https://github.com/jkutaso/SHADE-Arena.git@wheels
 
-# Core frameworks
-control-arena
+# Core frameworks (control-arena is not on PyPI — install from GitHub)
+git+https://github.com/UKGovernmentBEIS/control-arena.git
 inspect-ai
 
 # Anthropic + OpenAI clients (vLLM uses OpenAI-compatible API)
