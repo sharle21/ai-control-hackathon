@@ -16,8 +16,8 @@ ANTHROPIC_TRUSTED_MODEL = "anthropic/claude-opus-4-6"
 # For real vLLM (post-HF-access), swap to ports 8000 / 8001 / 8002.
 VLLM_ENDPOINTS: dict[str, str] = {
     "baseline_8b":   "http://localhost:8000/v1",
-    "variant_a_8b":  "http://localhost:8001/v1",
-    "variant_b_70b": "http://localhost:8002/v1",
+    "variant_a_8b":  "http://localhost:8000/v1",  # same GPU, sequential run
+    "variant_b_70b": "http://localhost:8000/v1",  # same GPU, sequential run
 }
 
 # ── Truncation proxy endpoints (framework calls THESE, not VLLM_ENDPOINTS) ───
