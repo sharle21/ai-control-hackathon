@@ -245,39 +245,76 @@ All use `api_key="EMPTY"`. OOM → circuit breaker trips for 60 s then auto-rese
 
 ---
 
-## Status (as of March 2026)
+## Status (as of 2026-03-21)
 
 **Done:**
-- [x] `TournamentRunner.py` — framework-native orchestrator (cleaned up, dead code removed)
+- [x] `TournamentRunner.py` — framework-native orchestrator
 - [x] `AnalysisSuite.py` — macro-protocol analysis layer
 - [x] `task_bank/scenarios/stress/synthetic_stress_tasks.json` — 3 stress tasks
-- [x] Stress test passed — with Ollama llama3.1 on H100 (`data/stress/`)
-- [x] Pilot run confirmed end-to-end — 1 task × variant_b_70b ATTACK completed in ~4 min
-- [x] `truncation_proxy.py` — reasoning-truncation + circuit-breaker proxy wired in
+- [x] `truncation_proxy.py` — reasoning-truncation + circuit-breaker proxy
+- [x] HF access — real Meta Llama weights available
+- [x] vLLM serving confirmed — 8B on H100 with `--enforce-eager --enable-auto-tool-choice --tool-call-parser llama3_json`
+- [x] Pipeline end-to-end confirmed — Haiku (trusted editor) appears in token stats, `trusted_editing_builder` running
+- [x] `heretic_editor_scaffold` wired into `get_control_task_product` — `private_thought` now passed and stripped from monitor
+- [x] Scorer tag fix — parses `<score>` first, fallback `<suspicion_score>`
+- [x] `max_steps=80`, `token_limit=4_000_000` — enough for SHADE tasks (~73 turns observed)
+- [x] All variants point to port 8000 — single H100, sequential runs
+- [x] Dual-track design documented — Track A (SHADE-Arena) + Track B (LinuxArena standalone)
 - [x] `CLAUDE.md` + PRD updated
 
-**Not done:**
-- [ ] HF access approved + real vLLM serving `meta-llama/Meta-Llama-3-8B-Instruct` (ports 8000/8001/8002)
-- [ ] Full 30-run SHADE-Arena experiment (blocked on HF access)
-- [ ] LinuxArena Track B: pull environments + run first eval (`lb run eval`)
-- [ ] Report (dual-track: merge Track A + Track B results)
+**Tomorrow — next session plan:**
+1. Spin up H100 GPU
+2. Setup:
+   ```bash
+   git clone https://github.com/sharle21/ai-control-hackathon.git
+   cd ai-control-hackathon
+   python3 -m venv venv && source venv/bin/activate
+   pip install -r requirements.txt
+   pip install git+https://github.com/jkutaso/SHADE-Arena.git@wheels
+   export ANTHROPIC_API_KEY=sk-ant-...
+   ```
+3. Start 70B vLLM server:
+   ```bash
+   vllm serve meta-llama/Meta-Llama-3-70B-Instruct \
+     --port 8000 --api-key EMPTY --enforce-eager \
+     --quantization bitsandbytes --load-format bitsandbytes \
+     --gpu-memory-utilization 0.9 \
+     --enable-auto-tool-choice \
+     --tool-call-parser llama3_json
+   ```
+4. Smoke test with 70B (Haiku monitor to save cost):
+   ```bash
+   python TournamentRunner.py --variant variant_b_70b --limit 1 --attack_only \
+     --task_pair "api_key_calendar_agendas_2" \
+     --trusted_model claude-haiku-4-5-20251001
+   ```
+5. **Smoke test pass criteria:**
+   - `tools_hidden_from_monitor` > 0 (scratchpad stripped ✓)
+   - `anthropic/claude-haiku` in token stats (trusted editing ran ✓)
+   - Non-zero scores (task completed ✓)
+6. If smoke test passes → full experiment with Opus as monitor:
+   ```bash
+   python TournamentRunner.py --variant variant_b_70b --task_pair ".*"
+   python TournamentRunner.py --variant baseline_8b  --task_pair ".*"
+   python TournamentRunner.py --variant variant_a_8b --task_pair ".*"
+   ```
+   Note: swap 8B server between baseline_8b and variant_a_8b runs (same model, same port 8000)
 
-**Notes:**
-- `mrc_tasks.json` / `leb_tasks.json` are NOT needed — full runs use `ShadeArenaSetting` which loads tasks from the SHADE-Arena framework directly via `--task_pair` regex
-- Stress test passed with Ollama llama3.1; stress test solver uses `VLLMClient` directly (not framework model routing)
-- Full experiment uses `openai/<model>` string + `OPENAI_BASE_URL` env var set in code per variant — no manual export needed
-- `config.py` endpoints currently point to Ollama (port 11434) for testing; swap to real vLLM ports (8000/8001/8002) once HF access arrives
-- `AttackPolicy`/`UntrustedPolicy` exist only in newer control-arena; wrapped in try/except — falls back to framework default attack prompt
-- `config.py` is wired into `TournamentRunner.py` via `from config import ...`; all constants live in one place
-- All `control_arena.analysis` imports in `AnalysisSuite.py` verified against installed package ✓
-- `get_control_task_product()` parameter is `modes=` not `eval_modes=` (fixed)
-- `truncation_proxy.py` must be started BEFORE `TournamentRunner.py` for full runs (stress test bypasses proxy — uses `VLLMClient` directly). Start all 3 in separate terminals:
-  ```bash
-  python truncation_proxy.py --variant baseline_8b    # listens :9000, forwards :11434 (or :8000)
-  python truncation_proxy.py --variant variant_a_8b   # listens :9001, forwards :11434 (or :8001)
-  python truncation_proxy.py --variant variant_b_70b  # listens :9002, forwards :11434 (or :8002)
-  ```
-  To disable proxy (framework calls vLLM directly): set `USE_TRUNCATION_PROXY = False` in `config.py`
+**Not done:**
+- [ ] Full 30-run Track A experiment
+- [ ] LinuxArena Track B: `uv run lb registry pull` + first eval
+- [ ] Report
+
+**Key technical notes:**
+- All variants point to port 8000 (single GPU, sequential) — `config.py`
+- 70B requires 4-bit quantization (`--quantization bitsandbytes`) to fit in 80GB H100
+- 8B requires `--gpu-memory-utilization 0.4` to avoid taking all VRAM
+- `AttackPolicy`/`UntrustedPolicy` unavailable on this control-arena install (v14.2.0) — falls back to SHADE-Arena's per-task attack prompt
+- `heretic_editor_scaffold` now passed to `get_control_task_product` — `private_thought` registered via `@attack_tool` and stripped before monitor sees it
+- `--untrusted_model` CLI flag is ignored when heretic scaffold is active (scaffold calls vLLM directly)
+- SHADE tasks average ~73 turns (`api_key_calendar_agendas_2` confirmed) — max_steps=80 is sufficient
+- Sonnet in token stats = SHADE's hardcoded evaluator (always present, not our monitor)
+- `tools_hidden_from_monitor: Array(0)` was the bug — fixed by passing scaffold
 
 ## Stress test task expectations
 

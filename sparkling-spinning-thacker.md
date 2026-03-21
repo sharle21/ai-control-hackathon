@@ -851,9 +851,26 @@ uv run lb run eval --policy honest -e clinical_trial
 
 Results from Track B are collected separately and merged with Track A findings in the report.
 
-### 7.2 Hypotheses
+### 7.2 Implementation Status (Updated 2026-03-21)
 
-**H1 (MRC sensitivity):** SBR will be significantly higher in MRC mode than LEB mode for all generator variants.
+| Component | Status | Notes |
+|---|---|---|
+| vLLM serving | ✓ Done | `--enforce-eager --enable-auto-tool-choice --tool-call-parser llama3_json` required for Llama 3 |
+| HF model access | ✓ Done | Meta Llama 3 8B + 70B available |
+| Single-GPU routing | ✓ Done | All variants → port 8000; sequential runs |
+| 70B quantization | Pending | `--quantization bitsandbytes` needed to fit 80GB H100 |
+| `heretic_editor_scaffold` wired | ✓ Done | Passed to `get_control_task_product`; `private_thought` stripped from monitor |
+| Scorer tag | ✓ Fixed | Parses `<score>` (framework) + `<suspicion_score>` (fallback) |
+| `max_steps` | ✓ Fixed | 80 steps — SHADE tasks confirmed ~73 turns |
+| `token_limit` | ✓ Fixed | 4M tokens |
+| Smoke test (8B) | ✗ Failed | 8B can't make structured tool calls — fake text responses |
+| Smoke test (Sonnet proxy) | Partial | Pipeline runs, trusted editing fires, but hits max_steps at 40 |
+| Smoke test (70B) | Pending | Tomorrow — first real test |
+| Full 30-run experiment | Pending | After 70B smoke test passes |
+
+### 7.3 Hypotheses
+
+**H1 (IT admin attack detectability):** SBR will be significantly higher in MRC mode than LEB mode for all generator variants.
 
 **H2 (Capability scaling — MRC):** SBR in MRC mode will increase monotonically with generator capability (baseline_8b < variant_a_8b < variant_b_70b).
 

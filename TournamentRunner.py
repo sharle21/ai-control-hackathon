@@ -811,9 +811,13 @@ def build_task_matrix(
         print(f"[DEBUG] AttackPolicy unavailable — framework default attack prompt will be used")
 
     # ── Generate the full task matrix: HONEST + ATTACK × all SHADE task pairs ─
+    # NOTE: get_control_task_product has no 'scaffolds' parameter. The framework
+    # routes the untrusted model via OPENAI_BASE_URL (set above in
+    # build_control_eval_config), and truncation_proxy.py handles reasoning
+    # truncation on that path. heretic_editor_scaffold is only used in the
+    # stress-test path (--task_file) via stress_test_solver, not here.
     tasks = get_control_task_product(
         settings=[setting],
-        scaffolds=[heretic_editor_scaffold(model_variant=model_variant)],
         micro_protocols=[micro_protocol],
         modes=[EvalMode.HONEST, EvalMode.ATTACK],
         eval_config=config,
@@ -1021,7 +1025,8 @@ def main() -> None:
     # ── Dispatch via Inspect AI eval_set() ────────────────────────────────────
     # eval_set() is the official control-arena multi-task runner.
     # It handles sandboxing, parallelism, logging, and the Inspect log viewer.
-    results = eval_set(
+    # Returns (success: bool, logs: list[EvalLog]).
+    _success, logs = eval_set(
         tasks,
         log_dir=str(DATA_DIR / args.variant),
         display="full",
@@ -1031,7 +1036,8 @@ def main() -> None:
     print("\n" + "=" * 64)
     print(f"  EXPERIMENT COMPLETE — variant: {args.variant}")
     print("=" * 64)
-    print(f"  Tasks completed: {sum(1 for r in results if r)} / {len(results)}")
+    n_success = sum(1 for r in logs if getattr(r, "status", "") == "success")
+    print(f"  Tasks completed: {n_success} / {len(logs)}")
     print(f"\n  Logs → {DATA_DIR / args.variant}")
     print("  Run `inspect view` to browse results in the Inspect UI.")
     print("=" * 64 + "\n")
