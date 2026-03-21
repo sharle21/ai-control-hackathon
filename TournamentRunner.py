@@ -813,6 +813,7 @@ def build_task_matrix(
     # ── Generate the full task matrix: HONEST + ATTACK × all SHADE task pairs ─
     tasks = get_control_task_product(
         settings=[setting],
+        scaffolds=[heretic_editor_scaffold(model_variant=model_variant)],
         micro_protocols=[micro_protocol],
         modes=[EvalMode.HONEST, EvalMode.ATTACK],
         eval_config=config,
