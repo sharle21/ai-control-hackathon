@@ -1,0 +1,6 @@
+__pycache__/
+data/runs/
+data/stress/
+data/figures/
+*.pyc
+.DS_Store

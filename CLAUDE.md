@@ -22,6 +22,7 @@ ai_control_hackathon/
 ├── AnalysisSuite.py           # Macro-protocol analysis + figures
 ├── config.py                  # Centralised constants — imported by TournamentRunner.py (DONE)
 ├── mock_vllm.py               # Mock vLLM server for pipeline testing without GPU (DONE)
+├── truncation_proxy.py        # Reasoning-truncation + circuit-breaker proxy (DONE)
 ├── requirements.txt           # Python dependencies (DONE)
 ├── task_bank/
 │   └── scenarios/
@@ -42,10 +43,12 @@ ai_control_hackathon/
 | Decision | Choice | Reason |
 |---|---|---|
 | Orchestration | `control_arena` + `inspect_ai` (`eval_set()`) | Framework-native; handles sandboxing, parallelism, logging |
-| Untrusted generator | `@control_agent` wrapping `VLLMClient` (OpenAI-compatible) | vLLM on H100, 3 variants |
+| Untrusted generator | `openai/<model>` via `ControlEvalConfig.untrusted_model` | Framework routes calls to vLLM/Ollama via `OPENAI_BASE_URL` |
 | Trusted editor | `trusted_editing_builder()` from `control_arena.micro_protocol` | Official micro-protocol |
 | Attack tool | `@attack_tool private_thought` | Framework hides it from monitor automatically — no manual stripping |
-| Scaffold | `@agent_scaffold HereticEditorScaffold` | Wires Stage 1 → Stage 2, respects attack tool hiding rules |
+| Attack prompt | `UntrustedPolicy(attack=AttackPolicy(prompt=...))` on micro-protocol | Custom Trojan-trap prompt; falls back to framework default if unavailable |
+| Reasoning truncation | `truncation_proxy.py` HTTP proxy between framework and vLLM | Clips `<reasoning>` to `GENERATOR_REASONING_MAX_CHARS` before monitor sees it — required for valid MSS calibration |
+| Circuit breaker | Also in `truncation_proxy.py` (trips on CUDA OOM, cooldown 60s) | Prevents cascade failures on the H100; proxy returns 503 while tripped |
 | Eval modes | `EvalMode.ATTACK` / `EvalMode.HONEST` | Official control-arena flags |
 | Suspicion scorer | `@scorer max_suspicion_score` with `mean()` | Parses `<suspicion_score>N</suspicion_score>` tag |
 | Log loading | `from control_arena.analysis import samples_df` | Official loader, returns `SamplesDataFrameSchema` |
@@ -75,17 +78,16 @@ ai_control_hackathon/
 
 ```python
 # control-arena
-from control_arena import (
-    agent_scaffold, AgentScaffold,
-    control_agent, ControlAgent,
-    control_task_metadata, ControlTaskMetadata,
-    control_solver, EvalMode,
-)
+from control_arena import EvalMode
 from control_arena.eval import ControlEvalConfig, get_control_task_product
 from control_arena.micro_protocol import trusted_editing_builder
-from control_arena.policy import attack_policy_builder, honest_policy_builder
 from control_arena.settings.shade_arena.shade_arena_setting import ShadeArenaSetting  # __init__.py is empty; import direct
 from control_arena.tools import attack_tool          # decorator, NOT a module
+# AttackPolicy/UntrustedPolicy exist in newer control-arena only — import defensively:
+try:
+    from control_arena.eval import AttackPolicy, UntrustedPolicy
+except ImportError:
+    pass  # framework default attack prompt used instead
 from control_arena.analysis import (
     samples_df,                                      # log loader
     compute_safety, compute_usefulness,
@@ -102,11 +104,8 @@ from control_arena.analysis import (
 from inspect_ai import Task, eval as inspect_eval, eval_set
 from inspect_ai.dataset import MemoryDataset, Sample  # Dataset is abstract; use MemoryDataset
 from inspect_ai.scorer import scorer, Score, mean
-from inspect_ai.solver import solver, Solver, TaskState, Generate, chain
-from inspect_ai.tool import Tool, ToolCall, ToolResult
-from inspect_ai.model import (
-    ChatMessageAssistant, ChatMessageSystem, ChatMessageUser, GenerateConfig,
-)
+from inspect_ai.solver import solver, Solver, TaskState, Generate
+from inspect_ai.model import ChatMessageAssistant, GenerateConfig
 ```
 
 ---
@@ -230,21 +229,35 @@ All use `api_key="EMPTY"`. OOM → circuit breaker trips for 60 s then auto-rese
 ## Status (as of March 2026)
 
 **Done:**
-- [x] `TournamentRunner.py` — framework-native orchestrator
+- [x] `TournamentRunner.py` — framework-native orchestrator (cleaned up, dead code removed)
 - [x] `AnalysisSuite.py` — macro-protocol analysis layer
 - [x] `task_bank/scenarios/stress/synthetic_stress_tasks.json` — 3 stress tasks
+- [x] Stress test passed — with Ollama llama3.1 on H100 (`data/stress/`)
+- [x] Pilot run confirmed end-to-end — 1 task × variant_b_70b ATTACK completed in ~4 min
+- [x] `truncation_proxy.py` — reasoning-truncation + circuit-breaker proxy wired in
 - [x] `CLAUDE.md` + PRD updated
 
 **Not done:**
-- [ ] Pilot run (5 tasks × 3 variants) — only after GPU + stress test passes on real vLLM
-- [ ] Full 180-run experiment
+- [ ] HF access approved + real vLLM serving `meta-llama/Meta-Llama-3-8B-Instruct` (ports 8000/8001/8002)
+- [ ] Full 180-run experiment (blocked on HF access)
 - [ ] Report
 
 **Notes:**
 - `mrc_tasks.json` / `leb_tasks.json` are NOT needed — full runs use `ShadeArenaSetting` which loads tasks from the SHADE-Arena framework directly via `--task_pair` regex
-- Stress test passed with mock vLLM (`mock_vllm.py`); re-run with real vLLM once GPU available
+- Stress test passed with Ollama llama3.1; stress test solver uses `VLLMClient` directly (not framework model routing)
+- Full experiment uses `openai/<model>` string + `OPENAI_BASE_URL` env var set in code per variant — no manual export needed
+- `config.py` endpoints currently point to Ollama (port 11434) for testing; swap to real vLLM ports (8000/8001/8002) once HF access arrives
+- `AttackPolicy`/`UntrustedPolicy` exist only in newer control-arena; wrapped in try/except — falls back to framework default attack prompt
 - `config.py` is wired into `TournamentRunner.py` via `from config import ...`; all constants live in one place
 - All `control_arena.analysis` imports in `AnalysisSuite.py` verified against installed package ✓
+- `get_control_task_product()` parameter is `modes=` not `eval_modes=` (fixed)
+- `truncation_proxy.py` must be started BEFORE `TournamentRunner.py` for full runs (stress test bypasses proxy — uses `VLLMClient` directly). Start all 3 in separate terminals:
+  ```bash
+  python truncation_proxy.py --variant baseline_8b    # listens :9000, forwards :11434 (or :8000)
+  python truncation_proxy.py --variant variant_a_8b   # listens :9001, forwards :11434 (or :8001)
+  python truncation_proxy.py --variant variant_b_70b  # listens :9002, forwards :11434 (or :8002)
+  ```
+  To disable proxy (framework calls vLLM directly): set `USE_TRUNCATION_PROXY = False` in `config.py`
 
 ## Stress test task expectations
 
